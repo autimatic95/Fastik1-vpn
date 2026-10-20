@@ -3,19 +3,19 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
-    // Временно убираем плагин kotlin.compose, так как он требует Kotlin 2.0+
+    alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
 }
 
 android {
     namespace = "com.torbastaev.fastikvpn"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.torbastaev.fastikvpn"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0"
 
@@ -36,18 +36,11 @@ android {
         targetCompatibility = JavaVersion.VERSION_11
     }
 
-    // Настройка компилятора Compose для версии Kotlin 1.9.x
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.8"
-    }
-
-    // Включаем Jetpack Compose
     buildFeatures {
         compose = true
     }
 }
 
-// Новый синтаксис для Kotlin
 kotlin {
     compilerOptions {
         jvmTarget.set(JvmTarget.JVM_11)
@@ -55,7 +48,6 @@ kotlin {
 }
 
 dependencies {
-    // Базовые библиотеки Android
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -72,7 +64,7 @@ dependencies {
     implementation(libs.androidx.compose.material.icons.extended)
     debugImplementation(libs.androidx.compose.ui.tooling)
 
-    // Hilt
+    // Hilt:
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.androidx.hilt.navigation.compose)
