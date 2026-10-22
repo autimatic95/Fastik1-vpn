@@ -4,4 +4,10 @@
     <string name="theme_dark">Тёмная</string>
     <string name="theme_light">Светлая</string>
     <string name="theme_system">Системная</string>
+    <string name="tab_home">Главная</string>
+    <string name="tab_login">Вход</string>
+    <string name="tab_settings">Настройки</string>
+    <string name="stub_home">Главный экран</string>
+    <string name="stub_login">Экран входа</string>
+    <string name="stub_settings">Экран настроек</string>
 </resources>
