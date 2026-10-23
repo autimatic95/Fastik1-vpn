@@ -10,4 +10,15 @@
     <string name="stub_home">Главный экран</string>
     <string name="stub_login">Экран входа</string>
     <string name="stub_settings">Экран настроек</string>
+    <string name="status_disconnected">Отключено</string>
+    <string name="status_connecting">Подключение…</string>
+    <string name="status_connected">Подключено</string>
+    <string name="ip_label">Ваш IP:</string>
+    <string name="ping_value">Пинг: %1$d мс</string>
+    <string name="ping_unknown">Пинг: —</string>
+    <string name="cd_connect_button">Кнопка подключения VPN</string>
+    <string name="ip_loading">определяем…</string>
+    <string name="ip_error">не удалось определить</string>
+    <string name="ping_loading">Пинг: …</string>
+    <string name="cd_refresh_ping">Обновить пинг</string>
 </resources>

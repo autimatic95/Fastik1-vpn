@@ -31,7 +31,6 @@ object Dimens {
     val EnterButtonRadius = fromDesign(40)
 
     // Карточка IP
-    val IpCardWidth = fromDesign(676)
     val IpCardHeight = fromDesign(243)
     val IpCardRadius = fromDesign(26)
     val IpIconWidth = fromDesign(178)
@@ -44,4 +43,8 @@ object Dimens {
     val SpacingL = 24.dp
     val SpacingXl = 32.dp
     val ScreenPadding = 20.dp
+    val IpPingGap = SpacingS
+    val IpCardWidth = (BottomBarWidth - IpPingGap) * 0.56f
+    val PingBadgeWidth = BottomBarWidth - IpPingGap - IpCardWidth
+    val ActionIconSize = 20.dp
 }
