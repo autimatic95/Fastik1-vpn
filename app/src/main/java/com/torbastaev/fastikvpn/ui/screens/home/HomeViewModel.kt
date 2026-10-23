@@ -39,7 +39,10 @@ class HomeViewModel @Inject constructor(
     }
 
     fun onIpCardClick() {
-        _uiState.update { it.copy(isPingVisible = !it.isPingVisible) }
+        // Пинг раскрывается только если VPN подключен
+        if (_uiState.value.connectionState == ConnectionState.CONNECTED) {
+            _uiState.update { it.copy(isPingVisible = !it.isPingVisible) }
+        }
     }
 
     fun onPingRefreshClick() {
@@ -66,7 +69,8 @@ class HomeViewModel @Inject constructor(
             it.copy(
                 connectionState = ConnectionState.DISCONNECTED,
                 pingMs = null,
-                isPingLoading = false
+                isPingLoading = false,
+                isPingVisible = false
             )
         }
         refreshIp()

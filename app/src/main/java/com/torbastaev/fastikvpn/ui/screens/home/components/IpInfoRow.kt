@@ -42,6 +42,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import com.torbastaev.fastikvpn.R
 import com.torbastaev.fastikvpn.core.constants.AnimationConstants
 import com.torbastaev.fastikvpn.core.constants.Dimens
+import com.torbastaev.fastikvpn.core.model.ConnectionState
 import com.torbastaev.fastikvpn.core.theme.FastikTheme
 
 @Composable
@@ -52,6 +53,7 @@ fun IpInfoRow(
     isPingLoading: Boolean,
     isPingVisible: Boolean,
     canRefreshPing: Boolean,
+    connectionState: ConnectionState,
     onCardClick: () -> Unit,
     onRefreshPingClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -64,6 +66,7 @@ fun IpInfoRow(
             ipAddress = ipAddress,
             isLoading = isIpLoading,
             isPingVisible = isPingVisible,
+            connectionState = connectionState,
             onClick = onCardClick
         )
         AnimatedVisibility(
@@ -88,6 +91,7 @@ private fun IpCard(
     ipAddress: String?,
     isLoading: Boolean,
     isPingVisible: Boolean,
+    connectionState: ConnectionState,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -99,6 +103,7 @@ private fun IpCard(
     )
     val ipText = when {
         isLoading -> stringResource(R.string.ip_loading)
+        connectionState != ConnectionState.CONNECTED -> "IP скрыт" // Если не подключено
         ipAddress != null -> ipAddress
         else -> stringResource(R.string.ip_error)
     }
@@ -108,7 +113,9 @@ private fun IpCard(
             .width(Dimens.IpCardWidth)
             .height(Dimens.IpCardHeight)
             .clip(shape)
-            .clickable(onClick = onClick),
+            .clickable(
+                enabled = connectionState == ConnectionState.CONNECTED,
+                onClick = onClick),
         shape = shape,
         color = MaterialTheme.colorScheme.surface
     ) {
@@ -119,12 +126,14 @@ private fun IpCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Dimens.SpacingS)
         ) {
-            Icon(
-                imageVector = Icons.Outlined.Public,
-                contentDescription = null,
-                tint = FastikTheme.colors.navIconActive,
-                modifier = Modifier.size(Dimens.IpIconHeight)
-            )
+            if (connectionState == ConnectionState.CONNECTED) {
+                Icon(
+                    imageVector = Icons.Outlined.Public,
+                    contentDescription = null,
+                    tint = FastikTheme.colors.navIconActive,
+                    modifier = Modifier.size(Dimens.IpIconHeight)
+                )
+            }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = stringResource(R.string.ip_label),

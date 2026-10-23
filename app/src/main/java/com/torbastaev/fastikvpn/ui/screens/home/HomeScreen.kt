@@ -68,6 +68,7 @@ import com.torbastaev.fastikvpn.ui.screens.home.components.VpnConnectButton
                     isPingLoading = state.isPingLoading,
                     isPingVisible = state.isPingVisible,
                     canRefreshPing = state.connectionState == ConnectionState.CONNECTED,
+                    connectionState = state.connectionState,
                     onCardClick = onIpCardClick,
                     onRefreshPingClick = onPingRefreshClick,
                     modifier = Modifier
