@@ -8,5 +8,6 @@ data class HomeUiState(
     val isIpLoading: Boolean = true,
     val pingMs: Int? = null,
     val isPingLoading: Boolean = false,
-    val isPingVisible: Boolean = false
+    val isPingVisible: Boolean = false,
+    val isAuthorized: Boolean = true
 )

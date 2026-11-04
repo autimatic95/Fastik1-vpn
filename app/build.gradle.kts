@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
@@ -7,7 +8,10 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
 }
-
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
 android {
     namespace = "com.torbastaev.fastikvpn"
     compileSdk = 36
@@ -18,8 +22,11 @@ android {
         targetSdk = 36
         versionCode = 10002
         versionName = "1.0.2"
-
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        val testLink = localProperties.getProperty("VLESS_TEST_LINK", "")
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+        buildConfigField("String", "VLESS_TEST_LINK", "\"$testLink\"")
     }
 
     buildTypes {
@@ -38,6 +45,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -54,7 +62,6 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.datastore.preferences)
-
     // Compose
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
@@ -74,4 +81,6 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     implementation(libs.androidx.core.splashscreen)
+    implementation(files("libs/libv2ray.aar"))
+    testImplementation("org.json:json:20240303")
 }

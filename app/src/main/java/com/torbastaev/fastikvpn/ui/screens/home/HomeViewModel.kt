@@ -31,6 +31,7 @@ class HomeViewModel @Inject constructor(
     }
 
     fun onConnectClick() {
+        if (!_uiState.value.isAuthorized) return
         when (_uiState.value.connectionState) {
             ConnectionState.DISCONNECTED -> connect()
             ConnectionState.CONNECTED -> disconnect()

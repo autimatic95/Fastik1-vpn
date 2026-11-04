@@ -52,7 +52,8 @@ import com.torbastaev.fastikvpn.ui.screens.home.components.VpnConnectButton
                 ) {
                     VpnConnectButton(
                         connectionState = state.connectionState,
-                        onClick = onConnectClick
+                        onClick = onConnectClick,
+                        enabled = state.isAuthorized
                     )
 
                     Spacer(modifier = Modifier.height(Dimens.SpacingL))
