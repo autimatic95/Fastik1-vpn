@@ -21,4 +21,8 @@
     <string name="ip_error">не удалось определить</string>
     <string name="ping_loading">Пинг: …</string>
     <string name="cd_refresh_ping">Обновить пинг</string>
+    <string name="vpn_channel_name">Состояние VPN</string>
+    <string name="vpn_notification_title">FastikVPN</string>
+    <string name="vpn_notification_text">VPN-туннель включён</string>
+    <string name="vpn_notification_stop">Отключить</string>
 </resources>

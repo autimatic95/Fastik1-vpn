@@ -25,10 +25,19 @@ import com.torbastaev.fastikvpn.ui.screens.home.components.VpnConnectButton
             viewModel: HomeViewModel = hiltViewModel()
         ) {
             val state by viewModel.uiState.collectAsStateWithLifecycle()
+            val requestConnect = rememberVpnPermissionRequest(onReady = viewModel::onConnectClick)
+
 
             HomeContent(
                 state = state,
-                onConnectClick = viewModel::onConnectClick,
+                onConnectClick = {
+                    if (state.connectionState == ConnectionState.DISCONNECTED) {
+                        // Включение: сначала разрешения. Отключению разрешения не нужны
+                        requestConnect()
+                    } else {
+                        viewModel.onConnectClick()
+                    }
+                },
                 onIpCardClick = viewModel::onIpCardClick,
                 onPingRefreshClick = viewModel::onPingRefreshClick,
                 modifier = modifier

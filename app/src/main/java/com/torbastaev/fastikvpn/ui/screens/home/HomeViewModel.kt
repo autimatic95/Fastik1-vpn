@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.torbastaev.fastikvpn.core.model.ConnectionState
 import com.torbastaev.fastikvpn.domain.repository.IpRepository
+import com.torbastaev.fastikvpn.vpn.VpnController
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -17,7 +18,8 @@ import kotlin.random.Random
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
-    private val ipRepository: IpRepository
+    private val ipRepository: IpRepository,
+    private val vpnController: VpnController
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -28,22 +30,22 @@ class HomeViewModel @Inject constructor(
 
     init {
         refreshIp()
+        viewModelScope.launch {
+            vpnController.state.collect { newState -> onVpnStateChanged(newState) }
+        }
     }
 
     fun onConnectClick() {
         if (!_uiState.value.isAuthorized) return
         when (_uiState.value.connectionState) {
-            ConnectionState.DISCONNECTED -> connect()
-            ConnectionState.CONNECTED -> disconnect()
+            ConnectionState.DISCONNECTED -> vpnController.connect()
+            ConnectionState.CONNECTED -> vpnController.disconnect()
             ConnectionState.CONNECTING -> Unit
         }
     }
 
     fun onIpCardClick() {
-        // Пинг раскрывается только если VPN подключен
-        if (_uiState.value.connectionState == ConnectionState.CONNECTED) {
-            _uiState.update { it.copy(isPingVisible = !it.isPingVisible) }
-        }
+        _uiState.update { it.copy(isPingVisible = !it.isPingVisible) }
     }
 
     fun onPingRefreshClick() {
@@ -53,34 +55,26 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    private fun connect() {
-        _uiState.update { it.copy(connectionState = ConnectionState.CONNECTING) }
+    private fun onVpnStateChanged(newState: ConnectionState) {
+        val oldState = _uiState.value.connectionState
+        _uiState.update { it.copy(connectionState = newState) }
 
-        viewModelScope.launch {
-            delay(CONNECT_DELAY_MS)
-            _uiState.update { it.copy(connectionState = ConnectionState.CONNECTED) }
-            refreshIp()
-            measurePing()
+        when {
+            newState == ConnectionState.CONNECTED && oldState != ConnectionState.CONNECTED -> {
+                refreshIp()
+                measurePing()
+            }
+            newState == ConnectionState.DISCONNECTED && oldState != ConnectionState.DISCONNECTED -> {
+                pingJob?.cancel()
+                _uiState.update { it.copy(pingMs = null, isPingLoading = false) }
+                refreshIp()
+            }
         }
-    }
-
-    private fun disconnect() {
-        pingJob?.cancel()
-        _uiState.update {
-            it.copy(
-                connectionState = ConnectionState.DISCONNECTED,
-                pingMs = null,
-                isPingLoading = false,
-                isPingVisible = false
-            )
-        }
-        refreshIp()
     }
 
     private fun refreshIp() {
         ipJob?.cancel()
         _uiState.update { it.copy(isIpLoading = true) }
-
         ipJob = viewModelScope.launch {
             val ip = ipRepository.getPublicIp()
             _uiState.update { it.copy(ipAddress = ip, isIpLoading = false) }
@@ -90,7 +84,6 @@ class HomeViewModel @Inject constructor(
     private fun measurePing() {
         pingJob?.cancel()
         _uiState.update { it.copy(isPingLoading = true) }
-
         pingJob = viewModelScope.launch {
             delay(Random.nextLong(PING_MIN_DELAY_MS, PING_MAX_DELAY_MS))
             val ping = Random.nextInt(PING_MIN_MS, PING_MAX_MS + 1)
@@ -99,7 +92,6 @@ class HomeViewModel @Inject constructor(
     }
 
     private companion object {
-        const val CONNECT_DELAY_MS = 800L
         const val PING_MIN_MS = 30
         const val PING_MAX_MS = 150
         const val PING_MIN_DELAY_MS = 400L
