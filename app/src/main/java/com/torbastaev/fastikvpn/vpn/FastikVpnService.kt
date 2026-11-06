@@ -9,11 +9,21 @@ import android.os.ParcelFileDescriptor
 import android.util.Log
 import com.torbastaev.fastikvpn.R
 import com.torbastaev.fastikvpn.core.model.ConnectionState
+import com.torbastaev.fastikvpn.data.source.TestVlessSource
+import com.torbastaev.fastikvpn.data.vless.XrayConfigBuilder
+import com.torbastaev.fastikvpn.domain.model.VlessConfig
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.IOException
 import javax.inject.Inject
 
-// Сам VPN-сервис. Его задача на этом этапе: создать виртуальную сетевую карту (TUN),
 // @AndroidEntryPoint позволяет Hilt заполнить поля, помеченные @Inject
 @AndroidEntryPoint
 class FastikVpnService : VpnService() {
@@ -23,11 +33,28 @@ class FastikVpnService : VpnService() {
 
     // уведомления
     @Inject lateinit var notificationFactory: VpnNotificationFactory
+    // Обёртка над ядром Xray
+    @Inject lateinit var xrayCore: XrayCore
 
-    // Открытая виртуальная карта.
+    // Источник параметров сервера. Пока это тестовая ссылка из local.properties,
+    // позже сюда придёт выбранный пользователем сервер
+    @Inject lateinit var vlessSource: TestVlessSource
+
+    // Сборщик JSON-настроек для ядра
+    @Inject lateinit var configBuilder: XrayConfigBuilder
+
+    // Область для корутин сервиса. Корутина - задача, которая умеет ждать, не замораживая приложение.
+    // Main - главный поток; SupervisorJob - если одна задача упала, остальные продолжают жить
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    // Задача запуска и задача остановки. Храним, чтобы не запустить дважды и уметь отменить
+    private var startJob: Job? = null
+    private var stopJob: Job? = null
+
+    // Открытая виртуальная карта. Пока она не null, туннель создан.
     // ParcelFileDescriptor - обёртка над файловым дескриптором (номером открытого "файла").
-    // этот номер позже получит Xray.
     private var tunInterface: ParcelFileDescriptor? = null
+    private var activeConfig: VlessConfig? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
@@ -40,31 +67,40 @@ class FastikVpnService : VpnService() {
         return START_NOT_STICKY
     }
 
-    // Включение туннеля
+    // Включение vpn
     private fun startTunnel() {
-        if (tunInterface != null) return
-
+        if (startJob?.isActive == true || tunInterface != null) return
         statusHolder.update(ConnectionState.CONNECTING)
 
         // Правило Android: после startForegroundService сервис обязан в течение ~5 секунд
-        // вызвать startForeground с уведомлением, иначе приложение будет остановлено.
         showForegroundNotification()
-        // Создаём виртуальную карту. Любая ошибка не должна ронять приложение.
-        val tun = try {
-            createTunnelBuilder().establish()
-        } catch (e: Exception) {
-            Log.e(TAG, "Не удалось создать туннель: ${e.message}")
-            null
-        }
-        // establish() возвращает null, если разрешение на VPN пропало
-        if (tun == null) {
-            stopTunnel()
-            return
-        }
+        startJob = serviceScope.launch {
+            try {
+                // Шаг 1. Берём параметры сервера и собираем из них JSON для ядра.
+                // getOrThrow бросит исключение, если ссылка не задана или неверна
+                val vless = vlessSource.getConfig().getOrThrow()
+                activeConfig = vless
+                val configJson = configBuilder.build(vless)
+                val tun = createTunnelBuilder().establish()
+                    ?: throw IllegalStateException("Система не создала туннель")
+                tunInterface = tun
 
-        tunInterface = tun
-        statusHolder.update(ConnectionState.CONNECTED)
-        Log.i(TAG, "Туннель создан")
+                withContext(Dispatchers.IO) {
+                    xrayCore.start(configJson, tun.fd)
+                }
+
+                // Всё получилось
+                statusHolder.update(ConnectionState.CONNECTED)
+                Log.i(TAG, "VPN включён")
+            } catch (e: CancellationException) {
+                // Нас отменили (пользователь нажал "выключить"): пробрасываем дальше как есть
+                throw e
+            } catch (e: Exception) {
+                // Любая другая ошибка: пишем в журнал без секретов и выключаемся
+                Log.e(TAG, "Не удалось включить VPN: ${redact(e.message)}")
+                stopTunnel()
+            }
+        }
     }
 
     // Показывает постоянное уведомление и переводит сервис в режим "на переднем плане"
@@ -79,7 +115,6 @@ class FastikVpnService : VpnService() {
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
             )
         } else {
-            // Старые версии тип не требуют
             startForeground(NOTIFICATION_ID, notification)
         }
     }
@@ -106,32 +141,58 @@ class FastikVpnService : VpnService() {
             try {
                 // Исключаем наше приложение из туннеля: ядро Xray работает внутри него,
                 // и его собственный трафик к серверу не должен возвращаться в туннель
+                // Иначе получится замкнутый круг
                 builder.addDisallowedApplication(packageName)
             } catch (e: Exception) {
-                Log.w(TAG, "Не удалось исключить приложение из туннеля: ${e.message}")
+                Log.w(TAG, "Не удалось исключить приложение из туннеля: ${e.javaClass.simpleName}}")
             }
         }
         return builder
     }
 
-    // Выключение туннеля
+    // Выключение vpn
     private fun stopTunnel() {
-        closeTunnel()
-        statusHolder.update(ConnectionState.DISCONNECTED)
-        stopForeground(STOP_FOREGROUND_REMOVE)
-        stopSelf()
+        if (stopJob?.isActive == true) return
+
+        // Если ещё шёл запуск, отменяем его
+        startJob?.cancel()
+        startJob = null
+
+        stopJob = serviceScope.launch {
+            // Останавливаем ядро в фоновом потоке.
+            withContext(Dispatchers.IO) { xrayCore.stop() }
+            Log.i(TAG, "Остановка: ядро остановлено")
+
+            closeTunnel()
+            Log.i(TAG, "Остановка: карта закрыта")
+            activeConfig = null
+            statusHolder.update(ConnectionState.DISCONNECTED)
+
+            // Убираем уведомление и завершаем сам сервис
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+        }
     }
 
-    // Закрывает виртуальную карту. Закрытие дескриптора = выключение туннеля.
+    // Закрывает копию виртуальной карты. Когда закрыты все копии, туннель выключается.
     private fun closeTunnel() {
         try {
             tunInterface?.close()
         } catch (e: IOException) {
-            Log.w(TAG, "Ошибка при закрытии туннеля: ${e.message}")
+            Log.w(TAG, "Ошибка при закрытии туннеля: ${e.javaClass.simpleName}}")
         }
         tunInterface = null
     }
+    // Закрашивает секреты в тексте, чтобы они не попали в журнал.
+    private fun redact(text: String?): String {
+        var result = text ?: return "нет сообщения"
+        val config = activeConfig ?: return result
 
+        listOf(config.uuid, config.publicKey, config.shortId)
+            .filter { it.isNotBlank() }
+            .forEach { secret -> result = result.replace(secret, "***") }
+        return result
+    }
     // Система вызывает, когда пользователь отозвал разрешение на VPN
     // или включил другое VPN-приложение, которое заняло наше место
     override fun onRevoke() {
@@ -140,10 +201,13 @@ class FastikVpnService : VpnService() {
         super.onRevoke()
     }
 
-    // Страховка: если сервис уничтожается неожиданно, туннель всё равно закрываем
+    // Страховка: если сервис уничтожается неожиданно, всё равно всё закрываем
     override fun onDestroy() {
+        serviceScope.cancel()
+        xrayCore.stop()
         closeTunnel()
         statusHolder.update(ConnectionState.DISCONNECTED)
+        Log.i(TAG, "Сервис уничтожен")
         super.onDestroy()
     }
 
